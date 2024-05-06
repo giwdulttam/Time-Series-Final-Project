@@ -1,0 +1,449 @@
+---
+title: "Final"
+output:
+  pdf_document: default
+  html_document: default
+date: "2024-04-24"
+---
+
+```{r}
+
+
+#install.packages("readxl")
+library(readxl)
+library(ggplot2)
+setwd("~/Desktop")
+
+price_data <- read_excel("Tomato Prices.xls")
+price_data
+
+price_data_df <- as.data.frame(price_data)
+
+
+colnames(price_data_df) <- c("date", "price")
+
+orig_data_df <- price_data_df
+
+
+
+
+price_data <- ts(price_data_df$price)  
+plot(price_data, xlab = "Months from January 1st, 1980", ylab = "price", main = "Average Price of Tomatoes per Pound Across US Cities")
+
+
+
+
+```
+
+# Examine Data for Outliers and Clean with tsclean():
+
+```{r}
+
+
+library(forecast)
+
+adjusted_series <- tsclean(price_data)
+
+plot(adjusted_series, type = "l", xlab = "Time", ylab = "Value", main = "Adjusted Time Series Data")
+
+adjusted_df <- data.frame(date = seq_along(adjusted_series), price = adjusted_series)
+
+print(adjusted_df)
+
+price_data_df <- adjusted_df
+orig_data_df <- adjusted_df
+
+plot(price_data_df$date, price_data_df$price, type = "l", xlab = "Date", ylab = "Price", main = "Cleaned Time Series Data")
+
+```
+
+```{r}
+
+
+#price_data_df$date <- as.numeric(price_data_df$date)
+#price_data_df$price <- as.numeric(price_data_df$price)
+
+
+
+#install.packages("VIM")
+#library(VIM)
+
+#df_imputed <- kNN(price_data_df, k = 5)
+
+#price_data_df$price <- df_imputed$price
+
+
+
+#price_data_df$date <- orig_data_df$date
+
+
+#price_data <- ts(price_data_df$price)  
+
+
+#price_data_df
+
+#price_data <- ts(price_data_df$price)  
+#plot(price_data, xlab = "Months from January 1st, 1980", ylab = "price", main = "Average US City Tomato Price")
+```
+
+# Classical Decomposition
+
+```{r}
+
+
+
+ts_data <- ts(price_data_df$price, frequency = 12)  
+
+ts_data_original <- ts_data
+
+
+origin_data <- ts(orig_data_df$price, frequency = 12)
+
+
+decomposed_ts <- decompose(ts_data, type = "additive")  
+
+
+
+
+plot(decomposed_ts$trend, main = "Trend", xlab="Date in Months from January 1st 1980", ylab = "Price in Dollars")
+
+plot(decomposed_ts$seasonal, main = "Season", xlab = "Date in Months from January 1st 1980", ylab = "Price in Dollars")
+
+plot(decomposed_ts$random, main = "Random", xlab="Date in Months from January 1st 1980", ylab = "Price in Dollars")
+
+
+
+par(mfrow = c(3, 1)) 
+
+plot(decomposed_ts$trend, main = "Trend", xlab="Date", ylab = "price")
+
+plot(decomposed_ts$seasonal, main = "Season", xlab = "date", ylab = "price")
+
+plot(decomposed_ts$random, main = "Random", xlab="date", ylab = "price")
+
+
+```
+
+# Dickey-Fuller Test to Check for Unit Root:
+
+```{r}
+
+
+#install.packages("tseries")
+library(tseries)
+
+ts_values<-as.numeric(origin_data)
+
+adf_test_result<-adf.test(ts_values)
+
+print(adf_test_result)
+
+```
+
+Since the p-value is greater than .05, we accept the Null and conclude that the data is non-stationary
+
+# Conduct Differencing and Seasonal Differencing:
+
+```{r}
+
+trend_removed_ts<-diff(ts_data, differences = 1)
+
+seasonal_diff_ts <- diff(trend_removed_ts, lag = 365)
+
+plot(seasonal_diff_ts, main = "Price Data without trend and seasonal components", xlab = "date", ylab = "diff(1), diff(12)")
+
+seasonal_diff_ts_numeric <- as.numeric(seasonal_diff_ts)
+
+
+```
+
+# Dickey-Fuller Test to Check for Unit Root:
+
+```{r}
+
+#install.packages("tseries")
+library(tseries)
+
+seasonal_diff_ts_numeric <-as.numeric(seasonal_diff_ts_numeric)
+
+adf_test_result <-adf.test(seasonal_diff_ts_numeric)
+
+print(adf_test_result)
+
+
+
+
+```
+
+Since the p-value is less than .05, we conclude that the data is stationary
+
+# ACF and PACF of stationary data - (after 1 differencing and 1 seasonal differencing):
+
+```{r}
+
+acf(seasonal_diff_ts_numeric, main="ACF")
+pacf(seasonal_diff_ts_numeric, main="PACF")
+
+
+
+```
+
+# Possible ARIMA and SARIMA Models from ACF and PACF plots - (fit to original data):
+
+```{r}
+
+library(forecast)
+
+
+
+arima_models <- list()
+
+arima_model_001 <- arima(ts_data_original, order = c(0, 1, 0), method = "ML")
+arima_models[["ARIMA(0,1,0)"]] <- arima_model_001
+
+arima_model_011 <- arima(ts_data_original, order = c(0, 1, 1), method = "ML")
+arima_models[["ARIMA(0,1,1)"]] <- arima_model_011
+
+arima_model_012 <- arima(ts_data_original, order = c(0, 1, 2), method = "ML")
+arima_models[["ARIMA(0,1,2)"]] <- arima_model_012
+
+arima_model_101 <- arima(ts_data_original, order = c(1, 1, 0), method = "ML")
+arima_models[["ARIMA(1,1,0)"]] <- arima_model_101
+
+arima_model_111 <- arima(ts_data_original, order = c(1, 1, 1), method = "ML")
+arima_models[["ARIMA(1,1,1)"]] <- arima_model_111
+
+arima_model_112 <- arima(ts_data_original, order = c(1, 1, 2), method = "ML")
+arima_models[["ARIMA(1,1,2)"]] <- arima_model_112
+
+arima_model_201 <- arima(ts_data_original, order = c(2, 1, 0), method = "ML")
+arima_models[["ARIMA(2,1,0)"]] <- arima_model_201
+
+arima_model_211 <- arima(ts_data_original, order = c(2, 1, 1), method = "ML")
+arima_models[["ARIMA(2,1,1)"]] <- arima_model_211
+
+arima_model_212 <- arima(ts_data_original, order = c(2, 1, 2), method = "ML")
+arima_models[["ARIMA(2,1,2)"]] <- arima_model_212
+
+
+
+
+
+sarima_models <- list()
+
+sarima_model_0010010 <- arima(ts_data_original, order = c(0, 1, 0), seasonal = list(order = c(0, 1, 0), period = 10), method = "ML")
+sarima_models[["SARIMA(0,1,0)(0,1,0)10"]] <- sarima_model_0010010
+
+sarima_model_0110010 <- arima(ts_data_original, order = c(0, 1, 1), seasonal = list(order = c(0, 1, 0), period = 10), method = "ML")
+sarima_models[["SARIMA(0,1,1)(0,1,0)10"]] <- sarima_model_0110010
+
+sarima_model_0120010 <- arima(ts_data_original, order = c(0, 1, 2), seasonal = list(order = c(0, 1, 0), period = 10), method = "ML")
+sarima_models[["SARIMA(0,1,2)(0,1,0)10"]] <- sarima_model_0120010
+
+sarima_model_1010010 <- arima(ts_data_original, order = c(1, 1, 0), seasonal = list(order = c(0, 1, 0), period = 10), method = "ML")
+sarima_models[["SARIMA(1,1,0)(0,1,0)10"]] <- sarima_model_1010010
+
+sarima_model_1110010 <- arima(ts_data_original, order = c(1, 1, 1), seasonal = list(order = c(0, 1, 0), period = 10), method = "ML")
+sarima_models[["SARIMA(1,1,1)(0,1,0)10"]] <- sarima_model_1110010
+
+sarima_model_1120010 <- arima(ts_data_original, order = c(1, 1, 2), seasonal = list(order = c(0, 1, 0), period = 10), method = "ML")
+sarima_models[["SARIMA(1,1,2)(0,1,0)10"]] <- sarima_model_1120010
+
+sarima_model_2010010 <- arima(ts_data_original, order = c(2, 1, 0), seasonal = list(order = c(0, 1, 0), period = 10), method = "ML")
+sarima_models[["SARIMA(2,1,0)(0,1,0)10"]] <- sarima_model_2010010
+
+sarima_model_2110010 <- arima(ts_data_original, order = c(2, 1, 1), seasonal = list(order = c(0, 1, 0), period = 10), method = "ML")
+sarima_models[["SARIMA(2,1,1)(0,1,0)10"]] <- sarima_model_2110010
+
+sarima_model_2120010 <- arima(ts_data_original, order = c(2, 1, 2), seasonal = list(order = c(0, 1, 0), period = 10), method = "ML")
+sarima_models[["SARIMA(2,1,2)(0,1,0)10"]] <- sarima_model_2120010
+
+
+
+print("ARIMA Models:")
+print(arima_models)
+
+print("SARIMA Models:")
+print(sarima_models)
+
+
+```
+
+# ARIMA Forecast with Best Model:
+
+```{r}
+
+library(forecast)
+
+forecast_values <- forecast(arima_model_212, h = 20)
+
+autoplot(forecast_values)
+
+
+```
+
+# Model Diagnostics for Best ARIMA Model:
+
+```{r}
+
+plot(arima_model_212$residuals / sqrt(arima_model_212$sigma2))
+
+
+qqnorm(residuals(arima_model_212))
+qqline(residuals(arima_model_212))
+
+
+acf(residuals(arima_model_212))
+
+ljung_box_results <- Box.test(residuals(arima_model_212), lag = 20, type = "Ljung-Box")
+print("Ljung-Box Test Results:")
+print(ljung_box_results)
+
+
+
+```
+
+# Model the Data with Auto.ARIMA function to compare:
+
+```{r}
+
+
+library(forecast)
+
+model <- auto.arima(ts_data_original, seasonal = TRUE)
+
+summary(model)
+
+
+forecast_result <- forecast(model, h = 50)
+print(forecast_result)
+plot(forecast_result)
+```
+
+# Model Diagnostics for Best auto Arima Model: 
+
+```{r}
+
+plot(model$residuals / sqrt(model$sigma2))
+
+
+qqnorm(residuals(model))
+qqline(residuals(model))
+
+
+acf(residuals(model))
+
+ljung_box_results <- Box.test(residuals(model), lag = 20, type = "Ljung-Box")
+print("Ljung-Box Test Results:")
+print(ljung_box_results)
+
+
+
+```
+
+# Smoothing-based Forecast: Holt-Winters:
+
+```{r}
+
+
+library(forecast)
+
+
+holtwintersmodel <- hw(ts_data_original, seasonal = "additive")
+
+forecast_values <- forecast(holtwintersmodel, h = 20)
+
+print(forecast_values)
+plot(forecast_values)
+
+
+
+```
+
+# 
+
+# Evaluation of Forecast Accuracy - SARIMA vs. Holt-Winters - (MAE, RMSE, MAPE) 
+
+Divide dataset into test and train
+
+```{r}
+
+testlen <- round(length(ts_data_original) * 0.1)
+
+train_data <- head(ts_data_original, -testlen)
+test_data <- tail(ts_data_original, testlen)
+
+```
+
+Refit the ARIMA models to the new training data;
+
+```{r}
+
+arima_model <- auto.arima(train_data, seasonal = TRUE)
+arima_forecast <- forecast(arima_model, h = 20)
+
+
+```
+
+Refit Holt-Winters to new data:
+
+```{r}
+
+holtwinters_model <- hw(train_data, seasonal = "additive")
+
+holtwinters_forecast <- forecast(holtwinters_model, h = 20 )
+
+
+```
+
+Create Function to get MAE, RMSE, MAP
+
+```{r}
+
+forecast_accuracy <- function(forc, act){
+  
+  
+
+    errors <- forc-act
+    
+    
+    mae <- mean(abs(errors))
+    
+    
+    rmse <- sqrt(mean(errors^2))
+    mape <- mean(abs(errors/  act))*100
+    
+    
+    return(c(MAE=mae, RMSE = rmse, MAPE = mape))
+    
+    
+    
+    
+    
+}
+
+```
+
+```{r}
+
+arima_acc <- forecast_accuracy(arima_forecast$mean, test_data)
+
+
+print("ARIMA Acc:")
+print(arima_acc)
+
+```
+
+```{r}
+
+
+HW_acc <- forecast_accuracy(holtwinters_forecast$mean, test_data)
+print("Holt-Winter Acc:")
+print(HW_acc)
+
+
+```
+
+The ARMIA forecast has lower MAE, RMSE and MAPE and is the better forecast.
+
+# 
